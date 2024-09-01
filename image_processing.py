@@ -1,154 +1,104 @@
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
+import logging
+
+#set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def image_data_extraction(path: str) -> np.ndarray:
+    # extracts HSV data from an image
+    try:
+        image = cv2.cvtColor(cv2.imread(path) ,cv2.COLOR_BGR2HSV_FULL)
+        data = np.dstack((image[..., 0], image[..., 1], image[..., 2]))   
+        return data.astype(np.uint8)
+    except Exception as e:
+        logging.error(f"\n\nError reading or processing image at {path}:\n   {e}\n")
+        raise
+
+def recurring_identify(data: np.ndarray, data_channel: int) -> list:
+    # identifies and sorts recurring HSV values in a specified channel
+    try:
+        channel_counts = np.bincount(data[:, :, data_channel].flatten())
+        non_zero_indices = np.nonzero(channel_counts)[0]
+        sorted_indices = non_zero_indices[channel_counts[non_zero_indices].argsort()[::-1]]
+        return list(sorted_indices)
+    except Exception as e:
+        logging.error(f"\n\nError identifying recurring values:\n   {e}\n")
+        raise
+
+def dictionary_mapping(source_arr: list, target_arr: list) -> dict:
+    # maps values from source to target based on frequency
+    try: 
+        mapped_dict = {}
+        if (len(source_arr) >= len(target_arr)):
+            for i in range(0,len(target_arr)):
+                mapped_dict[target_arr[i]] = source_arr[i]
+            return mapped_dict
+        else:
+            for i in range(0,len(source_arr)):
+                mapped_dict[target_arr[i]] = source_arr[i]
+            remaining = len(target_arr) - (len(target_arr) - len(source_arr))
+            for i in range(len(target_arr) - (len(target_arr) - len(source_arr)), len(target_arr)):
+                if (i - remaining == len(target_arr) - (len(target_arr) - len(source_arr))):
+                    remaining = remaining + len(target_arr) - (len(target_arr) - len(source_arr))
+                mapped_dict[target_arr[i]] = source_arr[i - remaining]
+        return mapped_dict
+    except Exception as e:
+        logging.error(f"\n\nError mapping dictionary:\n   {e}\n")
+        raise
+
+def apply_mapping(channel_data: np.ndarray, mapped_dictionary: dict) -> np.ndarray:
+    # applies mapping to channel data
+    try:
+        mask = np.isin(channel_data, list(mapped_dictionary.keys()))
+        vectorized_map = np.vectorize(mapped_dictionary.get)
+        channel_data[mask] = vectorized_map(channel_data[mask])
+        return channel_data
+    except Exception as e:
+        logging.error(f"\n\nError applying mapping:\n   {e}\n")
+
+def swap_channel_data(data: np.ndarray, data_channel: int, mapped_dictionary: dict) -> np.ndarray:
+    # swaps channel data based on mapping
+    try:
+        data = np.array(data)
+        channel_data = data[:, :, data_channel]
+        channel_data = apply_mapping(channel_data, mapped_dictionary)
+        data[:, :, data_channel] = channel_data
+        return data
+    except Exception as e:
+        logging.error(f"\n\nError swapping channel data:\n   {e}\n")
+        raise
+    
+
+def image_data_swap(target_data: np.ndarray, mapped_dictionary: dict, data_channel: int) -> np.ndarray:
+    # main function to swap data in a specified channel
+    return swap_channel_data(target_data, data_channel, mapped_dictionary)
 
 
+def process_images(source: str, target: str, data_channel: int) -> None:
+    try:
+        # extract data from the source and target images
+        source_data = image_data_extraction(source)
+        target_data = image_data_extraction(target)
 
-# image "manipulation" functions ------------------------------------
+        # identify the recurring HSV values in the specified data channel
+        source_array = recurring_identify(source_data, data_channel)
+        target_array = recurring_identify(target_data, data_channel)
 
+        # map the most recurring HSV values between source and target
+        mapped_dict = dictionary_mapping(source_array, target_array)
 
-# where the imputs are a path to an image
-def image_data_extraction(path: str):
-    # reading images -> converting to HSV colorspace
-    image = cv2.cvtColor(cv2.imread(path) ,cv2.COLOR_BGR2HSV_FULL)
+        # swap the data in the specified channel using the mapped dictionary
+        swapped_data = image_data_swap(target_data, mapped_dict, data_channel)
 
-    # get image height and width
-    height, width = image.shape[:2]
+        # Convert swapped data back to BGR color space for saving/viewing
+        swapped_image = cv2.cvtColor(swapped_data, cv2.COLOR_HSV2BGR_FULL)
         
-    # empty numpy array to store pixel data (HSV)
-    data = np.empty((width, height, 5), dtype=np.uint8)
-    
-    for x in range(width):
-        for y in range(height):
-            # accessing and storing hsv image data
-            data[x, y, 0] = x  # Store x coordinate
-            data[x, y, 1] = y  # Store y coordinate
-            data[x, y, 2] = image[x, y][0]  # Store hue value 
-            data[x, y, 3] = image[x, y][1]  # Store saturation value 
-            data[x, y, 4] = image[x, y][2]  # Store value value     
+        # Save the swapped image
+        output_path = "output_image.png"
+        cv2.imwrite(output_path, swapped_image)
 
-    return data
-
-# identify recurring HSV values
-def recurring_identify(data, data_channel):
-# initializing dict
-    dictionary = {}
-    for i in range(0,256):
-        dictionary[i] = 0
-
-    for x in range(len(data[0])): # length
-        for y in range(len(data[1])): # height
-            dictionary[data[x,y][data_channel]] += 1
-
-    # remove all zero values
-    non_zero_dict = {key: value for key, value in dictionary.items() if value != 0}
-
-    # overwrite data
-    non_zero_dict = dict(sorted(non_zero_dict.items(), key=lambda item: item[1], reverse=True))
-
-    return non_zero_dict
-
-def image_data_swap(path: str, source_dict, target_dict, target_image_data, data_channel):
-    # reading images -> converting to HSV colorspace
-    target_image = cv2.cvtColor(cv2.imread(path) ,cv2.COLOR_BGR2HSV_FULL)
-
-    # get image height and width
-    height, width = target_image.shape[:2]
-
-
-    # start color swap
-
-    
-    # convert dictionary keys to lists
-    keys_list1 = list(source_dict)
-    keys_list2 = list(target_dict)
-
-    # extend keys_list1 with additional keys from keys_list2
-    if (len(keys_list1) < len(keys_list2)):
-        keys_list1.extend(keys_list2[len(source_dict):])
-
-    # create a mapping dictionary
-    mapping = {}
-    for key, value in zip(target_dict.keys(), keys_list1):
-        mapping[key] = value
-
-    # print the resulting mapping
-    # print(mapping)
-
-    
-    for x in range(width):
-        for y in range(height):
-            # accessing and storing hsv image data
-            target_image_data[x, y, data_channel] = mapping[target_image_data[x, y, data_channel]]  # Store hue value 
-
-    return target_image_data
-
-
-
-# visualize functions ------------------------------------
-
-
-def hsv_print(path):
-    image = cv2.cvtColor(cv2.imread(path) ,cv2.COLOR_BGR2HSV_FULL)
-    cv2.imshow('hsv image',image)
-    cv2.waitKey(0)
-    #cv2.imwrite('hsv_image.jpg', image)
-
-def visualize_data(hue_channel, saturation_channel, value_channel):
-    # create the figure and adjust layout
-    fig, axes = plt.subplots(1, 3, figsize=(16, 4))
-    fig.subplots_adjust(left=0.1, bottom=0.1, right=0.9, top=0.9, wspace=0.4, hspace=0.4)
-
-    # display each channel on a separate subplot
-    fig.colorbar(axes[0].imshow(hue_channel, cmap="hsv"), ax=axes[0], label="Hue Value")
-    axes[0].set_title("Hue Channel")
-
-    axes[1].imshow(saturation_channel, cmap="gray")
-    axes[1].set_title("Saturation Channel")
-
-    axes[2].imshow(value_channel, cmap="gray")
-    axes[2].set_title("Value Channel")
-
-    plt.show()
-
-def hsv_bgr(hsv_data):
-    # extracting HSV channels cutting off x & y cords
-    data = hsv_data[:, :, :3] 
-    print(f"Number of channels in new_image: {data.shape[2]}")
-
-    return cv2.cvtColor(data.astype(np.float32), cv2.COLOR_HSV2BGR_FULL)
-
-
-
-# just storing functions ------------------------------------
-
-
-# lowkey dont know why i need this, but still kinda cool 
-# analyse image in chunks to do less operations
-# also need to update x and y stuff but nawwwwww
-def chunk_analysis(image_data, image_path):
-    image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2HSV_FULL)
-
-    size = 3
-
-    x = image.shape[1] - (image.shape[1] % size)
-    y = image.shape[0] - (image.shape[0] % size)
-    
-    data = np.empty((int(y/size), int(x/size), 5), dtype=np.uint8)
-    
-    # iterate through the center of every 3x3 chung available and store the val
-    # of that center pixel into out data array
-    index_y = 0
-    index_x = 0
-    for i in range(1, y, size):
-        for j in range(1, x, 3):
-            data[index_y, index_x, 0] = i  # Store x coordinate
-            data[index_y, index_x, 1] = j  # Store y coordinate
-            data[index_y, index_x, 2] = image_data[i, j][0]  # Store hue value 
-            data[index_y, index_x, 3] = image_data[i, j][1]  # Store saturation value 
-            data[index_y, index_x, 4] = image_data[i, j][2]  # Store value value 
-            index_x += 1
-        index_x = 0
-        index_y += 1
-
-    return data
+        logging.info(f"\n\nNew image saved as {output_path}\n")
+        
+    except Exception as e:
+        logging.error(f"\n\nAn error occurred in main:\n   {e}\n")
