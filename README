@@ -1,0 +1,43 @@
+# Colorspace-Swap
+
+## Overview
+
+This project is a colorswapping tool which utilizes the colorspace data from an image to sort, rearrange and remap an image in order to create a replica image with swapped colorspaces. These colorspaces include: RGB, HSV, and YUV. This tool is designed to be used repeatedly and allows for images to be quickly colorswapped to fit user requirments.
+
+## Requirements 
+
+Python 3.x
+
+## Installation
+
+1. Clone the repository:
+```bash
+  git clone <https://github.com/bryantolmos/Colorspace-Swap.git>
+cd Colorspace-Swap
+```
+
+2. Ensure Python3.x is installed and install required libraries:
+```bash
+pip install -r requirements.txt
+```
+
+##Usage
+
+Run the code to begin swapping one colorspace to another
+```bash
+python colorspace_swap.py --input <input_image_path> --output <output_image_path> --colorspace <colorspace>
+```
+
+###Usage Entries
+
+--input: Path to the input image file.
+--output: Path where the output image will be saved.
+--colorspace: Target color space for conversion (e.g., RGB, HSV, YUV).
+
+##Visualization
+
+
+
+##Conclusion
+
+The Colorswapping tool can be a powerful asset to allow for quick and accessable colorswapping to streamline image processing on projects working with different colorspaces.
